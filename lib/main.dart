@@ -225,8 +225,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 } else {}
                 var spaceThresh = 0;
                 if (spaceFoundYet && spacesFound > spaceThresh) {
-                  if (currentChar == "-") {
-                    value += "-";
+                  if (currentChar == "-" || currentChar == "+") {
+                    value += currentChar;
                     var nextChar = source.substring(i + 1, i + 2);
                     if (!isNumeric(nextChar)) {
                       break;
@@ -419,6 +419,12 @@ class _MyHomePageState extends State<MyHomePage> {
               getCBC("BE", "\n", _ocrText, "BE")
             ];
             _formattedText += ABG.join();
+
+            // urinalysis
+            // var urinalysis = [
+            //   getCBC("Color", "\n", _ocrText, "Color"),
+            // ];
+            // _formattedText += urinalysis.join();
 
             // additional
             var additional = [
