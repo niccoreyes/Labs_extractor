@@ -230,10 +230,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     value += currentChar;
                     var nextChar = source.substring(i + 1, i + 2);
                     if (!isNumeric(nextChar)) {
-                      if (wrapper) {
-                        value = "(" + value + ")";
+                      if (nextChar == "+" || nextChar == "-") {
+                      } else {
+                        if (wrapper) {
+                          value = "(" + value + ")";
+                        }
+                        break;
                       }
-                      break;
                     }
                   }
                   if (isNumeric(currentChar)) {
@@ -255,7 +258,7 @@ class _MyHomePageState extends State<MyHomePage> {
               }
             }
 
-            String getUrinalysis(
+            String getUriFeca(
                 String start, String end, String source, String shorthand) {
               int startLength = start.length;
               var startIndex = source.indexOf(start);
@@ -384,6 +387,45 @@ class _MyHomePageState extends State<MyHomePage> {
             if (bedNo != '' || name != '') {
               _formattedText += "$bedNo$name\n";
             }
+
+            //Get date
+            try {
+              var dateRegex = RegExp(r'Received: (\d{2}/\d{2}/\d{4})');
+              var dateString = _ocrText;
+
+              var dateMatch = dateRegex.firstMatch(dateString);
+              var month = 0;
+              var day = 0;
+              var year = 0;
+              if (dateMatch != null && dateMatch.groupCount > 0) {
+                _formattedText += "${dateMatch.group(1)}\n";
+              }
+            } catch (e) {}
+            //Get time
+            try {
+              var timeRegex = RegExp(r'(\d{2}):(\d{2})');
+              var timeString = 'The time is 11:30';
+
+              var timeMatch = timeRegex.firstMatch(_ocrText);
+
+              var hour = 0;
+              var minute = 0;
+              var am_pm = "";
+              if (timeMatch != null) {
+                if (timeMatch[1] != null) {
+                  hour = int.parse(timeMatch[1]!);
+                  if (hour > 12) {
+                    hour = hour - 12;
+                    am_pm = "pm";
+                  }
+                }
+                if (timeMatch[2] != null) {
+                  minute = int.parse(timeMatch[2]!);
+                }
+              }
+              _formattedText += "$hour:$minute$am_pm\n";
+            } catch (e) {}
+
             //_formattedText += "$creatinine$sodium$potassium$ica$chloride";
 
             bool containsUrinalysis(String s) {
@@ -391,7 +433,163 @@ class _MyHomePageState extends State<MyHomePage> {
               return regExp.hasMatch(s);
             }
 
-            if (!containsUrinalysis(_ocrText)) {
+            bool containsFecalysis(String s) {
+              RegExp regExp = RegExp(r'\bFECALYSIS\b');
+              return regExp.hasMatch(s);
+            }
+
+            String ABGdata() {
+              // ABG
+              var ABG = [
+                onlyReturnOne([
+                  getCBC("Fl", "\n", _ocrText, "FiO2"),
+                  getCBC("FIOz%:", "\n", _ocrText, "FiO2"),
+                  getCBC("FIO", "\n", _ocrText, "FiO2"),
+                  getCBC("FIOz", "\n", _ocrText, "FiO2"),
+                  getCBC("FiO", "\n", _ocrText, "FiO2")
+                ]),
+                //_ocrText.indexOf("FIOz"),
+                getCBC("pH ", "\n", _ocrText, "pH"),
+                getCBC("pCO", "\n", _ocrText, "pCO2"),
+                onlyReturnOne([
+                  getCBC("pOz", "\n", _ocrText, "pO2"),
+                  getCBC("pO;", "\n", _ocrText, "pO2"),
+                  getCBC("pO", "\n", _ocrText, "pO2"),
+                  getCBC("pOz", "\n", _ocrText, "pO2")
+                ]),
+                onlyReturnOne([
+                  getCBC("SPO2", "\n", _ocrText, "SpO2"),
+                  getCBC("S0", "\n", _ocrText, "SpO2"),
+                  getCBC("0:%", "\n", _ocrText, "SpO2")
+                ]),
+                getCBC("Hct", "\n", _ocrText, "Hct"),
+                getCBC("Hb", "\n", _ocrText, "Hgb"),
+                getCBC("pCO:tc", "\n", _ocrText, "pCO2tc"),
+                getCBC("pQ:tc", "\n", _ocrText, "pO2tc"),
+                getCBC("pHtc", "\n", _ocrText, "pHtc"),
+                getCBC("TCO", "\n", _ocrText, "TCO2"),
+                onlyReturnOne([
+                  getCBC("HCO", "\n", _ocrText, "HCO3-"),
+                  getCBC("HCO:-", "\n", _ocrText, "HCO3-"),
+                ]),
+                getCBC("BEecf", "\n", _ocrText, "BEecf"),
+                onlyReturnOne([
+                  getCBC("BEh", "\n", _ocrText, "BEb"),
+                  getCBC("BEb", "\n", _ocrText, "BEb"),
+                ]),
+
+                getCBC("SBC", "\n", _ocrText, "SBC"),
+                getCBC("Ct", "\n", _ocrText, "O2Ct"),
+                getCBC("Cap", "\n", _ocrText, "O2Cap"),
+                getCBC("A ", "\n", _ocrText, "A"),
+                getCBC("A-aD", "\n", _ocrText, "A-aDO2"),
+                onlyReturnOne([
+                  getCBC("Rl", "\n", _ocrText, "RI"),
+                  getCBC("RI", "\n", _ocrText, "RI"),
+                ]),
+                onlyReturnOne([
+                  getCBC("PO:FIO", "\n", _ocrText, "PO2/FIO2"),
+                ]),
+              ];
+              return ABG.join();
+            }
+
+            String ABGresult = ABGdata();
+            int countCommas(String input) {
+              // Split the string on the comma character
+              List<String> parts = input.split(',');
+
+              // Return the length of the resulting list
+              return parts.length;
+            }
+
+            // if ABG result is not empty and has more than 5 results,
+            // else consider it as other labs
+            if (ABGresult != "" && countCommas(ABGresult) > 5) {
+              _formattedText += ABGresult;
+            } else if (containsFecalysis(_ocrText)) {
+              // fecalysis
+              var fecalysis = [
+                getUriFeca("Color", "\n", _ocrText, "Color:"),
+                getUriFeca("Consistency", "\n", _ocrText, "Consistency:"),
+                getCBC("Muscle Fiber", "\n", _ocrText, "Muscle fiber",
+                    wrapper: true),
+                getCBC("Vegetable Cell", "\n", _ocrText, "Vegetable cell",
+                    wrapper: true),
+                getCBC("Starch Granules", "\n", _ocrText, "Starch granules",
+                    wrapper: true),
+                getCBC("Yeast Cell", "\n", _ocrText, "Yeast cell",
+                    wrapper: true),
+                getCBC("Fat Globules", "\n", _ocrText, "Fat globules",
+                    wrapper: true),
+                getCBC("Red Blood Cell", "\n", _ocrText, "RBC", wrapper: true),
+                getCBC("Pus Cell", "\n", _ocrText, "Pus", wrapper: true),
+                getUriFeca("Mucus", "\n", _ocrText, "Mucus:"),
+                getCBC("Macrophage", "\n", _ocrText, "Macrophage",
+                    wrapper: true),
+                getCBC("Ascaris", "\n", _ocrText, "Ascaris", wrapper: true),
+                getCBC("Trichuris", "\n", _ocrText, "Trichuris", wrapper: true),
+                getCBC("histolytica cyst", "\n", _ocrText, "E. Hist Cyst",
+                    wrapper: true),
+                getCBC(
+                    "histolytica troph", "\n", _ocrText, "E. Hist. trophozoite",
+                    wrapper: true),
+                getCBC("coli cyst", "\n", _ocrText, "E. Coli cyst",
+                    wrapper: true),
+                getCBC(
+                    "coli trophozoite", "\n", _ocrText, "E. Coli trophozoite",
+                    wrapper: true),
+                getCBC(
+                    "Blastocystis hominis", "\n", _ocrText, "Blastocystis H.",
+                    wrapper: true),
+                getCBC(
+                    "Trichomonas", "\n", _ocrText, "Trichomonas intestinalis",
+                    wrapper: true),
+                getCBC("Giardia lamblia cyst", "\n", _ocrText,
+                    "Giardia lamblia cyst",
+                    wrapper: true),
+                getCBC("Giardia lamblia tropho", "\n", _ocrText,
+                    "Giardia lamblia trophozoite",
+                    wrapper: true)
+              ];
+              _formattedText += fecalysis.join();
+            } else if (containsUrinalysis(_ocrText)) {
+              // urinalysis
+              var urinalysis = [
+                getUriFeca("Color", "\n", _ocrText, "Color"),
+                getUriFeca("Transparency", "\n", _ocrText, "Transparency"),
+                getCBC("pH", "\n", _ocrText, "pH"),
+                getCBC("Gravity", "\n", _ocrText, "SpGr."),
+                getUriFeca("Albumin", "\n", _ocrText, "Albu"),
+                getUriFeca("Leukocytes", "\n", _ocrText, "Leu"),
+                getUriFeca("Erythrocytes", "\n", _ocrText, "Erythrocytes"),
+                getUriFeca("Bilirubin", "\n", _ocrText, "Bilirubin"),
+                getUriFeca("Nitrite", "\n", _ocrText, "Nitrite"),
+                getUriFeca("Ketone", "\n", _ocrText, "Ketone"),
+                getUriFeca("Urobilinogen", "\n", _ocrText, "Urobilinogen"),
+                getCBC("Red Blood Cell", "\n", _ocrText, "RBC"),
+                getCBC("Pus Cell", "\n", _ocrText, "Pus"),
+                getCBC("Squamous Cell", "\n", _ocrText, "Squamous",
+                    wrapper: true),
+                getCBC("Renal Cell", "\n", _ocrText, "Renal", wrapper: true),
+                getCBC("Epithelial Cell", "\n", _ocrText, "Epithelial",
+                    wrapper: true),
+                getUriFeca("Bacteria", "\n", _ocrText, "Bacteria"),
+                getCBC("Mucus Threads", "\n", _ocrText, "Mucus", wrapper: true),
+                getCBC("Urates", "\n", _ocrText, "Urates", wrapper: true),
+                getCBC("Uric Acid", "\n", _ocrText, "Uric Acid", wrapper: true),
+                getCBC("Oxalate", "\n", _ocrText, "Calcium Ox", wrapper: true),
+                getCBC("phous Phosphate", "\n", _ocrText, "PO4", wrapper: true),
+                getCBC("Triple Phosphate", "\n", _ocrText, "Triphosphate",
+                    wrapper: true),
+                getCBC("Hyaline", "\n", _ocrText, "Hyaline", wrapper: true),
+                getCBC("Granular", "\n", _ocrText, "Granular", wrapper: true),
+                getCBC("Waxy", "\n", _ocrText, "Waxy", wrapper: true),
+                getCBC("RBC Cast", "\n", _ocrText, "RBC Cast", wrapper: true),
+                getCBC("WBC Cast", "\n", _ocrText, "WBC Cast", wrapper: true),
+              ];
+              _formattedText += urinalysis.join();
+            } else {
               // Na, K iCa
               var NaKiCa = [
                 getCBC("reatinine", "\n", _ocrText, "Crea"),
@@ -470,59 +668,6 @@ class _MyHomePageState extends State<MyHomePage> {
               ];
 
               _formattedText += alpast.join();
-              // ABG
-              var ABG = [
-                onlyReturnOne([
-                  getCBC("Fl", "\n", _ocrText, "FiO2"),
-                  getCBC("FIOz%:", "\n", _ocrText, "FiO2"),
-                  getCBC("FIO", "\n", _ocrText, "FiO2"),
-                  getCBC("FIOz", "\n", _ocrText, "FiO2"),
-                  getCBC("FiO", "\n", _ocrText, "FiO2")
-                ]),
-                //_ocrText.indexOf("FIOz"),
-                getCBC("pH ", "\n", _ocrText, "pH"),
-                getCBC("pCO", "\n", _ocrText, "pCO2"),
-                onlyReturnOne([
-                  getCBC("pOz", "\n", _ocrText, "pO2"),
-                  getCBC("pO;", "\n", _ocrText, "pO2"),
-                  getCBC("pO", "\n", _ocrText, "pO2"),
-                  getCBC("pOz", "\n", _ocrText, "pO2")
-                ]),
-                onlyReturnOne([
-                  getCBC("SPO2", "\n", _ocrText, "SpO2"),
-                  getCBC("S0", "\n", _ocrText, "SpO2"),
-                  getCBC("0:%", "\n", _ocrText, "SpO2")
-                ]),
-                getCBC("Hct", "\n", _ocrText, "Hct"),
-                getCBC("Hb", "\n", _ocrText, "Hgb"),
-                getCBC("pCO:tc", "\n", _ocrText, "pCO2tc"),
-                getCBC("pQ:tc", "\n", _ocrText, "pO2tc"),
-                getCBC("pHtc", "\n", _ocrText, "pHtc"),
-                getCBC("TCO", "\n", _ocrText, "TCO2"),
-                onlyReturnOne([
-                  getCBC("HCO", "\n", _ocrText, "HCO3-"),
-                  getCBC("HCO:-", "\n", _ocrText, "HCO3-"),
-                ]),
-                getCBC("BEecf", "\n", _ocrText, "BEecf"),
-                onlyReturnOne([
-                  getCBC("BEh", "\n", _ocrText, "BEb"),
-                  getCBC("BEb", "\n", _ocrText, "BEb"),
-                ]),
-
-                getCBC("SBC", "\n", _ocrText, "SBC"),
-                getCBC("Ct", "\n", _ocrText, "O2Ct"),
-                getCBC("Cap", "\n", _ocrText, "O2Cap"),
-                getCBC("A ", "\n", _ocrText, "A"),
-                getCBC("A-aD", "\n", _ocrText, "A-aDO2"),
-                onlyReturnOne([
-                  getCBC("Rl", "\n", _ocrText, "RI"),
-                  getCBC("RI", "\n", _ocrText, "RI"),
-                ]),
-                onlyReturnOne([
-                  getCBC("PO:FIO", "\n", _ocrText, "PO2/FIO2"),
-                ]),
-              ];
-              _formattedText += ABG.join();
 
               // additional
               var additional = [
@@ -531,42 +676,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 getCBC("CRP", "\n", _ocrText, "CRP"),
               ];
               _formattedText += additional.join();
-            } else {
-              // urinalysis
-              var urinalysis = [
-                getUrinalysis("Color", "\n", _ocrText, "Color"),
-                getUrinalysis("Transparency", "\n", _ocrText, "Transparency"),
-                getCBC("pH", "\n", _ocrText, "pH"),
-                getCBC("Gravity", "\n", _ocrText, "SpGr."),
-                getUrinalysis("Albumin", "\n", _ocrText, "Albu"),
-                getUrinalysis("Leukocytes", "\n", _ocrText, "Leu"),
-                getUrinalysis("Erythrocytes", "\n", _ocrText, "Erythrocytes"),
-                getUrinalysis("Bilirubin", "\n", _ocrText, "Bilirubin"),
-                getUrinalysis("Nitrite", "\n", _ocrText, "Nitrite"),
-                getUrinalysis("Ketone", "\n", _ocrText, "Ketone"),
-                getUrinalysis("Urobilinogen", "\n", _ocrText, "Urobilinogen"),
-                getCBC("Red Blood Cell", "\n", _ocrText, "RBC"),
-                getCBC("Pus Cell", "\n", _ocrText, "Pus"),
-                getCBC("Squamous Cell", "\n", _ocrText, "Squamous",
-                    wrapper: true),
-                getCBC("Renal Cell", "\n", _ocrText, "Renal", wrapper: true),
-                getCBC("Epithelial Cell", "\n", _ocrText, "Epithelial",
-                    wrapper: true),
-                getUrinalysis("Bacteria", "\n", _ocrText, "Bacteria"),
-                getCBC("Mucus Threads", "\n", _ocrText, "Mucus", wrapper: true),
-                getCBC("Urates", "\n", _ocrText, "Urates", wrapper: true),
-                getCBC("Uric Acid", "\n", _ocrText, "Uric Acid", wrapper: true),
-                getCBC("Oxalate", "\n", _ocrText, "Calcium Ox", wrapper: true),
-                getCBC("phous Phosphate", "\n", _ocrText, "PO4", wrapper: true),
-                getCBC("Triple Phosphate", "\n", _ocrText, "Triphosphate",
-                    wrapper: true),
-                getCBC("Hyaline", "\n", _ocrText, "Hyaline", wrapper: true),
-                getCBC("Granular", "\n", _ocrText, "Granular", wrapper: true),
-                getCBC("Waxy", "\n", _ocrText, "Waxy", wrapper: true),
-                getCBC("RBC Cast", "\n", _ocrText, "RBC Cast", wrapper: true),
-                getCBC("WBC Cast", "\n", _ocrText, "WBC Cast", wrapper: true),
-              ];
-              _formattedText += urinalysis.join();
             }
 
             //trim white spaces
